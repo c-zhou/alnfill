@@ -1,4 +1,4 @@
-# ALNfill: Enhancing Genome Alignment by Filling Gaps with LastZ
+# ALNfill: Enhancing Genome Alignment by Filling Gaps with LastZ [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.14641762.svg)](https://doi.org/10.5281/zenodo.14641762)
 
 Genome comparison is a critical and foundational task in many biological applications. While [LastZ](https://github.com/lastz/lastz) is renowned for generating highly sensitive alignments, its performance often comes at the expense of speed. In contrast, modern tools like [FastGA](https://github.com/thegenemyers/FASTGA), [minimap2](https://github.com/lh3/minimap2), and [wfmash](https://github.com/waveygang/wfmash) offer much faster genome alignment capabilities but typically sacrifice sensitivity, especially when applied to comparisons between highly divergent species.
 
