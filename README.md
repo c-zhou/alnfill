@@ -69,4 +69,4 @@ Example: ./alnfill -t 32 -o gapfill.paf ref.fa qry.fa intervals.txt
 
 ## Known issues
 
-There are likely overlaps between the FastGA alignments and LastZ alignments due to the `-e` parameter in `alngap`. However, setting this parameter to `0` is not a ideal solution as it could result in some missed alignments that extend from the FastGA alignments.
+There are likely overlaps between the FastGA alignments and LastZ alignments due to the `-e` parameter in `alngap`. However, setting this parameter to `0` is not an ideal solution as it could result in some missed alignments that extend from the FastGA alignments.
