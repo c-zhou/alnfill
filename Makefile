@@ -1,4 +1,4 @@
-CFLAGS=		-g -O3 -Wall -fno-strict-aliasing -Wno-unused-function -Wno-deprecated-declarations
+CFLAGS=		-O3 -Wall -fno-strict-aliasing -Wno-unused-function -Wno-deprecated-declarations
 CPPFLAGS=
 INCLUDES=
 OBJS=
