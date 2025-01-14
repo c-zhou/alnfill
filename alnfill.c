@@ -69,8 +69,6 @@ typedef struct {
     sdict_t *qdicts;
 } data_t;
 
-void kt_for(int n_threads, void (*func)(void*,long,int), void *data, long n);
-
 int run_system_cmd(char *cmd, int retry)
 { 
     int exit_code = system(cmd);

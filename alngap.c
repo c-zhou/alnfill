@@ -36,6 +36,7 @@
 
 #include "ketopt.h"
 #include "kvec.h"
+#include "kthread.h"
 
 #include "paf.h"
 #include "misc.h"
@@ -404,8 +405,6 @@ void gap_core(void *_data, long i, int tid)
     }
     pthread_mutex_unlock(&print_mutex);
 }
-
-void kt_for(int n_threads, void (*func)(void*,long,int), void *data, long n);
 
 static int align_gaps(aln_t *alns, int64 naln, sdict_t *qdicts, sdict_t *tdicts, int n_threads, int min_gap, int max_gap, int max_ovl)
 { 

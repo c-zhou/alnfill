@@ -42,5 +42,5 @@ paf.o: paf.h misc.h kseq.h
 misc.o: misc.h kseq.h
 kthread.o: kthread.h
 kalloc.o: kalloc.h
-alngap.o: sdict.h rtree.h misc.h paf.h ketopt.h kvec.h
+alngap.o: sdict.h rtree.h misc.h paf.h ketopt.h kvec.h kthread.h
 alnfill.o: sdict.h misc.h paf.h ketopt.h kvec.h kseq.h kthread.h kstring.h
