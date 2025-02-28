@@ -55,6 +55,14 @@ typedef struct {
 } aln_t;
 
 typedef struct {
+    int64  abpos, aepos;
+    int64  bbpos, bepos;
+    int    abovl, aeovl;
+    int    bbovl, beovl;
+    uint8  flag;
+} gap_t;
+
+typedef struct {
     int beg;
     int end;
 } range_t;
@@ -291,8 +299,8 @@ static int RORDER(const void *a, const void *b)
 static int AORDER(const void *a, const void *b)
 { 
     int64  xm, ym;
-    aln_t *x = (aln_t *) a;
-    aln_t *y = (aln_t *) b;
+    gap_t *x = (gap_t *) a;
+    gap_t *y = (gap_t *) b;
     
     xm = (x->aepos - x->abpos) * (x->bepos - x->bbpos);
     ym = (y->aepos - y->abpos) * (y->bepos - y->bbpos);
@@ -304,12 +312,13 @@ bool item_clone(const DATATYPE item, DATATYPE *into, void *udata) {return true;}
 void item_free(const DATATYPE item, void *udata) {};
 
 typedef kvec_t(aln_t) aln_v;
+typedef kvec_t(gap_t) gap_v;
 
 typedef struct {
     int min_gap, max_gap, max_ovl;
     aln_t   *alns;
     aln_v   *abufs;
-    aln_v   *gbufs;
+    gap_v   *gbufs;
     uint64  *ranges;
     sdict_t *tdicts;
     sdict_t *qdicts;
@@ -325,7 +334,7 @@ void gap_core(void *_data, long i, int tid)
     int max_gap = data->max_gap;
     int min_gap = data->min_gap;
     int max_ovl = data->max_ovl;
-    aln_v *gaps = &data->gbufs[tid];
+    gap_v *gaps = &data->gbufs[tid];
     int64  naln = (uint32) data->ranges[i];
     aln_t *alns = data->abufs[tid].a;
     memcpy(alns+1, data->alns+(data->ranges[i]>>32), sizeof(aln_t)*naln);
@@ -365,43 +374,50 @@ void gap_core(void *_data, long i, int tid)
             bepos2 = aln2->bepos;
             dist   = (bbpos1>bbpos2? bbpos1 : bbpos2) - (bepos1<bepos2? bepos1 : bepos2);
             if (dist >= min_gap && dist <= max_gap)
-                kv_push(aln_t, *gaps,
-                    ((aln_t) {
-                        0, 
-                        0,
+                kv_push(gap_t, *gaps,
+                    ((gap_t) {
                         (abpos1>aepos1-max_ovl)? abpos1 : (aepos1-max_ovl), 
                         (aepos2<abpos2+max_ovl)? aepos2 : (abpos2+max_ovl), 
                         (bepos1<bepos2? ((bbpos1>bepos1-max_ovl)? bbpos1 : (bepos1-max_ovl)) : ((bbpos2>bepos2-max_ovl)? bbpos2 : (bepos2-max_ovl))), 
                         (bbpos1>bbpos2? ((bepos1<bbpos1+max_ovl)? bepos1 : (bbpos1+max_ovl)) : ((bepos2<bbpos2+max_ovl)? bepos2 : (bbpos2+max_ovl))),
-                        0
+                        (abpos1>aepos1-max_ovl)? (aepos1-abpos1) : max_ovl, 
+                        (aepos2<abpos2+max_ovl)? (aepos2-abpos2) : max_ovl,
+                        (bepos1<bepos2? ((bbpos1>bepos1-max_ovl)? (bepos1-bbpos1) : max_ovl) : ((bbpos2>bepos2-max_ovl)? (bepos2-bbpos2) : max_ovl)), 
+                        (bbpos1>bbpos2? ((bepos1<bbpos1+max_ovl)? (bepos1-bbpos1) : max_ovl) : ((bepos2<bbpos2+max_ovl)? (bepos2-bbpos2) : max_ovl)), 
+                        0,
                     }));
         }
     }
     if (!gaps->n) return;
 
     // only keep minimal bounding boxes, i. e., those spanning a single gap
-    qsort(gaps->a, gaps->n, sizeof(aln_t), AORDER); // sort by size
+    qsort(gaps->a, gaps->n, sizeof(gap_t), AORDER); // sort by size
     
+    gap_t *gap1, *gap1e;
     struct rtree *gap_tr = rtree_new();
     gap_tr->item_clone = item_clone;
     gap_tr->item_free  = item_free;
-    for (aln1 = gaps->a, aln1e = gaps->a+gaps->n; aln1 < aln1e; aln1++) {
-        if (!rtree_exist_node_inside(gap_tr, (NUMTYPE[2]){aln1->abpos,aln1->bbpos}, (NUMTYPE[2]){aln1->aepos,aln1->bepos})) {
-            aln1->mlen = 1;
-            rtree_insert(gap_tr, (NUMTYPE[2]){aln1->abpos,aln1->bbpos}, (NUMTYPE[2]){aln1->aepos,aln1->bepos}, NULL);
+    for (gap1 = gaps->a, gap1e = gaps->a+gaps->n; gap1 < gap1e; gap1++) {
+        if (!rtree_exist_node_inside(gap_tr, (NUMTYPE[2]){gap1->abpos,gap1->bbpos}, (NUMTYPE[2]){gap1->aepos,gap1->bepos})) {
+            gap1->flag = 1;
+            rtree_insert(gap_tr, (NUMTYPE[2]){gap1->abpos,gap1->bbpos}, (NUMTYPE[2]){gap1->aepos,gap1->bepos}, NULL);
         }
     }
     rtree_free(gap_tr);
 
     // output gaps
     pthread_mutex_lock(&print_mutex);
-    for (aln1 = gaps->a, aln1e = gaps->a+gaps->n; aln1 < aln1e; aln1++) {
-        if (aln1->mlen == 0) continue;
+    for (gap1 = gaps->a, gap1e = gaps->a+gaps->n; gap1 < gap1e; gap1++) {
+        if (gap1->flag == 0) continue;
         b_stats[0] += 1;
-        b_stats[1] += aln1->aepos - aln1->abpos;
-        b_stats[2] += aln1->bepos - aln1->bbpos;
-        b_stats[3] += (aln1->aepos - aln1->abpos) * (aln1->bepos - aln1->bbpos);
-        fprintf(stdout, "%s\t%lld\t%lld\t%s\t%lld\t%lld\n", qname, aln1->abpos, aln1->aepos, tname, aln1->bbpos, aln1->bepos);
+        b_stats[1] += gap1->aepos - gap1->abpos;
+        b_stats[2] += gap1->bepos - gap1->bbpos;
+        b_stats[3] += (gap1->aepos - gap1->abpos) * (gap1->bepos - gap1->bbpos);
+        fprintf(stdout, "%s\t%lld\t%lld\t%s\t%lld\t%lld\t%d\t%d\t%d\t%d\n", 
+            qname, gap1->abpos, gap1->aepos, 
+            tname, gap1->bbpos, gap1->bepos,
+            gap1->abovl, gap1->aeovl,
+            gap1->bbovl, gap1->beovl);
     }
     pthread_mutex_unlock(&print_mutex);
 }
@@ -413,7 +429,8 @@ static int align_gaps(aln_t *alns, int64 naln, sdict_t *qdicts, sdict_t *tdicts,
     int64 i, j, m;
     int a, b;
     kvec_t(uint64) ranges;
-    aln_v  *abufs, *gbufs;
+    aln_v  *abufs;
+    gap_v  *gbufs;
     data_t *data;
 
     qsort(alns, naln, sizeof(aln_t), RORDER);
@@ -433,15 +450,15 @@ static int align_gaps(aln_t *alns, int64 naln, sdict_t *qdicts, sdict_t *tdicts,
     }
     kv_push(uint64, ranges, (uint64)j<<32|(i-j));
     if (m < i-j) m = i-j;
-    MYCALLOC(abufs, n_threads*2);
-    if (abufs == NULL)
-        mem_alloc_error("a&b bufs");
-    gbufs = abufs + n_threads;
+    MYCALLOC(abufs, n_threads);
+    MYCALLOC(gbufs, n_threads);
+    if (abufs == NULL || gbufs == NULL)
+        mem_alloc_error("a/g bufs");
     for (i = 0; i < n_threads; i++) {
         kv_resize(aln_t, abufs[i], m+2);
-        kv_resize(aln_t, gbufs[i], m*4);
+        kv_resize(gap_t, gbufs[i], m*4);
         if (abufs[i].a == NULL || gbufs[i].a == NULL)
-            mem_alloc_error("a/b bufs");
+            mem_alloc_error("a/g bufs");
     }
 
     MYCALLOC(data, 1);
@@ -455,11 +472,17 @@ static int align_gaps(aln_t *alns, int64 naln, sdict_t *qdicts, sdict_t *tdicts,
     data->tdicts = tdicts;
     data->qdicts = qdicts;
 
+    // print header
+    fprintf(stdout, "#Q_NAME\tQ_BEG\tQ_END\tT_NAME\tT_BEG\tT_END\tQ_BEG_OVL\tQ_END_OVL\tT_BEG_OVL\tT_END_OVL\n");
+    
     kt_for(n_threads, gap_core, data, ranges.n);
 
-    for (i = 0; i < n_threads*2; i++)
+    for (i = 0; i < n_threads; i++) {
         kv_destroy(abufs[i]);
+        kv_destroy(gbufs[i]);
+    }
     free(abufs);
+    free(gbufs);
     free(data);
     kv_destroy(ranges);
 
@@ -515,7 +538,7 @@ int main(int argc, char *argv[])
     do_rba = 1;
     n_threads = 1;
   
-    while ((c = ketopt(&opt, argc, argv, 1, opt_str, long_options)) >=0 ) {
+    while ((c = ketopt(&opt, argc, argv, 1, opt_str, long_options)) >=0) {
         if (c == 'l') min_gap = (int) parse_num(opt.arg);
         else if (c == 'm') max_gap = (int) parse_num(opt.arg);
         else if (c == 'f') max_cov = (int) parse_num(opt.arg);
