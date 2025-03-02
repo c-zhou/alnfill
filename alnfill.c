@@ -287,7 +287,7 @@ int main(int argc, char *argv[])
     lazopts = "--format=PAF:wfmash --ambiguous=iupac";
     n_threads = 1;
 
-    while ((c = ketopt(&opt, argc, argv, 1, opt_str, long_options)) >=0 ) {
+    while ((c = ketopt(&opt, argc, argv, 1, opt_str, long_options)) >=0) {
         if (c == 't') n_threads = atoi(opt.arg);
         else if (c == 'w') workdir = opt.arg;
         else if (c == 'z') lazexec = opt.arg;
@@ -355,6 +355,9 @@ int main(int argc, char *argv[])
     }
     ks = ks_init(fp);
     while (ks_getuntil(ks, KS_SEP_LINE, &buf, &dret) >= 0) {
+        // header lines
+        if (buf.l > 0 && buf.s[0] == '#') continue;
+
         fields = parse_interval(buf.l, buf.s, &qname, &qbeg, &qend, &tname, &tbeg, &tend);
         
         if (fields != 6) {
