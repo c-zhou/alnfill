@@ -14,6 +14,17 @@ To compile ALNfile from source code, you need to have a C compiler, GNU make and
 
 - You need the [LastZ](https://github.com/lastz/lastz) executable to run `alnfill`. It could be made available to the program through the environmental path or specified as a program parameter.
 
+## Quick start
+
+Below is a recipe for running FastGA followed by gap filling to align `qry.fa` to the reference genome `ref.fa`. This assumes that `lastz` is accessible in the environment; otherwise, the path must be specified for `alnfill` using the `-z` option.
+
+```
+FastGA -T8 -P. qry.fa ref.fa >fga.paf                 # run FastGA to generate a PAF file
+alngap -t8 fga.paf >intervals.txt                     # generate a list of gaps for filling
+alnfill -t8 ref.fa qry.fa intervals.txt >laz.paf      # run LastZ for gap filling
+cat fga.paf laz.paf >all.paf                          # merge FastGA and LastZ results together
+```
+
 ## Run ALNfill
 
 ALNfill can be run in two simple steps.
