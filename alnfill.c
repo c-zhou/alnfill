@@ -56,6 +56,8 @@ typedef struct {
     uint32 qsid, tsid;
     int64  qbeg, qend;
     int64  tbeg, tend;
+    int    qbol, qeol;
+    int    tbol, teol;
 } interval_t;
 
 typedef struct {
@@ -210,11 +212,16 @@ void lastz_fill(void *_data, long i, int tid)
     }
 }
 
-static inline int parse_interval(int l, char *s, char **qname, int64 *qbeg, int64 *qend, char **tname, int64 *tbeg, int64 *tend)
+static inline int parse_interval(int l, char *s, char **qname, int64 *qbeg, int64 *qend, char **tname, int64 *tbeg, int64 *tend, 
+    int *qbol, int *qeol, int *tbol, int *teol)
 {
     int i, fields;
     char *q;
 	
+    *qbol = 0;
+    *qeol = 0;
+    *tbol = 0;
+    *teol = 0;
     i = fields = 0;
     
     // qname
@@ -257,6 +264,34 @@ static inline int parse_interval(int l, char *s, char **qname, int64 *qbeg, int6
     q = s;
     while (*s && !isspace(*s) && i < l) {s++; i++;}
     if (s > q) {*s='\0'; *tend=strtoll(q,0,10); fields++;} else {return fields;}
+
+    // qbol
+    s++; i++;
+    while (*s && isspace(*s) && i < l) {s++; i++;}
+    q = s;
+    while (*s && !isspace(*s) && i < l) {s++; i++;}
+    if (s > q) {*s='\0'; *qbol=strtol(q,0,10); fields++;} else {return fields;}
+
+    // qeol
+    s++; i++;
+    while (*s && isspace(*s) && i < l) {s++; i++;}
+    q = s;
+    while (*s && !isspace(*s) && i < l) {s++; i++;}
+    if (s > q) {*s='\0'; *qeol=strtol(q,0,10); fields++;} else {return fields;}
+
+    // tbol
+    s++; i++;
+    while (*s && isspace(*s) && i < l) {s++; i++;}
+    q = s;
+    while (*s && !isspace(*s) && i < l) {s++; i++;}
+    if (s > q) {*s='\0'; *tbol=strtol(q,0,10); fields++;} else {return fields;}
+
+    // teol
+    s++; i++;
+    while (*s && isspace(*s) && i < l) {s++; i++;}
+    q = s;
+    while (*s && !isspace(*s) && i < l) {s++; i++;}
+    if (s > q) {*s='\0'; *teol=strtol(q,0,10); fields++;} else {return fields;}
 
 	return fields;
 }
@@ -347,6 +382,7 @@ int main(int argc, char *argv[])
     char *qname, *tname;
     uint32 tsid, qsid;
     int64 qbeg, qend, tbeg, tend, tlen, qlen;
+    int qbol, qeol, tbol, teol;
     int dret, fields;
     fp = gzopen(argv[opt.ind+2], "r");
     if (!fp) {
@@ -358,9 +394,9 @@ int main(int argc, char *argv[])
         // header lines
         if (buf.l > 0 && buf.s[0] == '#') continue;
 
-        fields = parse_interval(buf.l, buf.s, &qname, &qbeg, &qend, &tname, &tbeg, &tend);
+        fields = parse_interval(buf.l, buf.s, &qname, &qbeg, &qend, &tname, &tbeg, &tend, &qbol, &qeol, &tbol, &teol);
         
-        if (fields != 6) {
+        if (fields < 6) {
             fprintf(stderr, "[W::%s] error reading interval line: %s...\n", __func__, buf.s);
             continue;
         }
@@ -378,18 +414,18 @@ int main(int argc, char *argv[])
         }
         
         qlen = qdicts->s[qsid].len;
-        if (qbeg < 0 || qend > qlen ) {
-            fprintf(stderr, "[E::%s] invalid query range: %s:%lld-%lld\n", __func__, qname, qbeg, qend);
+        if (qbeg < qbol || qend + qeol > qlen) {
+            fprintf(stderr, "[E::%s] invalid query range: %s:%lld[%d]-%lld[%d]\n", __func__, qname, qbeg, qbol, qend, qeol);
             exit (1);
         }
 
         tlen = tdicts->s[tsid].len;
-        if (tbeg < 0 || tend > tlen ) {
-            fprintf(stderr, "[E::%s] invalid target range: %s:%lld-%lld\n", __func__, tname, tbeg, tend);
+        if (tbeg < tbol || tend + teol > tlen) {
+            fprintf(stderr, "[E::%s] invalid target range: %s:%lld[%d]-%lld[%d]\n", __func__, tname, tbeg, tbol, tend, teol);
             exit (1);
         }
 
-        kv_push(interval_t, intervals, ((interval_t){qsid, tsid, qbeg, qend, tbeg, tend}));
+        kv_push(interval_t, intervals, ((interval_t){qsid, tsid, qbeg, qend, tbeg, tend, qbol, qeol, tbol, teol}));
     }
     ks_destroy(ks);
     gzclose(fp);

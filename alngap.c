@@ -597,9 +597,11 @@ int main(int argc, char *argv[])
     tdicts = sd_init();
     
     alns = read_pafs(argv + opt.ind, argc - opt.ind, qdicts, tdicts, &naln);
-
-    // find reciprocal best alignments
-    if (do_rba)
+    
+    if (naln == 0)
+        fprintf(stderr, "[W::%s] empty input PAF file\n", __func__);
+    else if (do_rba)
+        // find reciprocal best alignments
         alns = reciprocal_best_aligns(alns, naln, qdicts, tdicts, max_cov, &naln);
 
     // find gaps
