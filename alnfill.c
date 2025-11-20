@@ -414,15 +414,11 @@ int main(int argc, char *argv[])
         }
         
         qlen = qdicts->s[qsid].len;
-        if (qbeg < qbol || qend + qeol > qlen) {
-            fprintf(stderr, "[E::%s] invalid query range: %s:%lld[%d]-%lld[%d]\n", __func__, qname, qbeg, qbol, qend, qeol);
-            exit (1);
-        }
-
         tlen = tdicts->s[tsid].len;
-        if (tbeg < tbol || tend + teol > tlen) {
-            fprintf(stderr, "[E::%s] invalid target range: %s:%lld[%d]-%lld[%d]\n", __func__, tname, tbeg, tbol, tend, teol);
-            exit (1);
+        if (qbeg < qbol || qend + qeol > qlen || tbeg < tbol || tend + teol > tlen) {
+            fprintf(stderr, "[W::%s] skip invalid gap: %s[%lld]:%lld[%d]-%lld[%d] x %s[%lld]:%lld[%d]-%lld[%d]\n", 
+                __func__, qname, qlen, qbeg, qbol, qend, qeol, tname, tlen, tbeg, tbol, tend, teol);
+            continue;
         }
 
         kv_push(interval_t, intervals, ((interval_t){qsid, tsid, qbeg, qend, tbeg, tend, qbol, qeol, tbol, teol}));
